@@ -1,0 +1,157 @@
+# Builds Code Toolbox for Linux (.deb, .rpm, Arch .pkg.tar.zst) and Windows (installer .exe, cross-compiled
+# with cargo-xwin) on the instance's Docker runner, plus the dev-layout extension (.vsix, which every app
+# build also bundles).
+# A tag vX.Y.Z (matching the version in app/src-tauri/tauri.conf.json) uploads them to the project's
+# package registry and creates a release. macOS needs a Mac: `make publish-mac` builds it there and
+# adds it to the same release (see README.md, "Releasing").
+
+stages:
+  - test
+  - build
+  - release
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+variables:
+  GIT_DEPTH: 1
+  RUST_IMAGE: rust:1.97-bookworm
+  NODE_MAJOR: "24"
+  CARGO_HOME: $CI_PROJECT_DIR/.cache/cargo
+  npm_config_cache: $CI_PROJECT_DIR/.cache/npm
+  CARGO_TERM_COLOR: always
+  PACKAGES_URL: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/code-toolbox
+
+default:
+  tags:
+    - docker
+  interruptible: true
+
+# Rust image plus Node (the panel is built with Vite) and the Tauri CLI from app/package.json.
+.rust-node:
+  image: $RUST_IMAGE
+  before_script:
+    - export PATH="$CARGO_HOME/bin:$PATH"
+    - |
+      case "$(uname -m)" in x86_64) arch=x64 ;; aarch64) arch=arm64 ;; esac
+      base="https://nodejs.org/dist/latest-v$NODE_MAJOR.x"
+      tarball=$(curl -fsSL "$base/SHASUMS256.txt" | grep -o "node-v[0-9.]*-linux-$arch.tar.xz" | head -1)
+      curl -fsSL "$base/$tarball" | tar -xJ -C /usr/local --strip-components=1
+      node --version
+    - (cd app && npm ci --no-audit --no-fund)
+
+.cache-cargo:
+  cache:
+    key: cargo-$CI_JOB_NAME
+    paths:
+      - .cache/cargo/registry/index
+      - .cache/cargo/registry/cache
+      - .cache/cargo/git/db
+      - .cache/cargo/bin
+      - .cache/npm
+      - .cache/xwin
+
+test:
+  stage: test
+  extends: [.rust-node, .cache-cargo]
+  script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev >/dev/null
+    - cargo test -p toolbox-core --locked
+    - (cd app && npx tsc --noEmit)
+
+linux:
+  stage: build
+  extends: [.rust-node, .cache-cargo]
+  needs: [test]
+  script:
+    - apt-get update -qq
+    - >
+      apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+      librsvg2-dev libxdo-dev libssl-dev libsqlite3-dev file >/dev/null
+    # No AppImage: it bundles WebKitGTK (~95 MB), over the instance's artifact size limit. Arch gets its
+    # own package below; other distros take the .deb or .rpm.
+    - (cd app && npx tauri build --bundles deb,rpm)
+    - mkdir -p dist
+    - scripts/collect-bundles.sh target/release/bundle dist
+    # The build packaged the extension for the app's resources; it's a release download too.
+    - cp build/dev-layout.vsix "dist/dev-layout-$(node -p "require('./vscode-dev-layout/package.json').version").vsix"
+  artifacts:
+    paths: [dist/]
+    expire_in: 30 days
+
+windows:
+  stage: build
+  extends: [.rust-node, .cache-cargo]
+  # Tauri's installer script needs NSIS 3.09+ (Win\RestartManager.nsh); bookworm has 3.08.
+  image: rust:1.97-trixie
+  needs: [test]
+  variables:
+    XWIN_CACHE_DIR: $CI_PROJECT_DIR/.cache/xwin
+    # cargo-xwin downloads the MSVC CRT and Windows SDK headers, which needs their license accepted.
+    XWIN_ACCEPT_LICENSE: "1"
+  script:
+    # The Tauri CLI looks for the Linux tray library (through pkg-config) on a Linux host, even when
+    # building for Windows.
+    - >
+      apt-get update -qq && apt-get install -y -qq --no-install-recommends nsis lld llvm clang
+      libayatana-appindicator3-dev pkg-config >/dev/null
+    - rustup target add x86_64-pc-windows-msvc
+    - command -v cargo-xwin || cargo install --locked cargo-xwin
+    - (cd app && npx tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis)
+    - mkdir -p dist
+    - scripts/collect-bundles.sh target/x86_64-pc-windows-msvc/release/bundle dist
+  artifacts:
+    paths: [dist/]
+    expire_in: 30 days
+
+# The .deb's files repackaged for Arch and CachyOS (packaging/arch/PKGBUILD).
+arch:
+  stage: build
+  image: archlinux:base-devel
+  needs: [linux]
+  script:
+    - |
+      version=$(sed -n 's/.*"version": "\(.*\)".*/\1/p' app/src-tauri/tauri.conf.json | head -1)
+    - useradd -m builder
+    - mkdir /tmp/pkg && cp packaging/arch/PKGBUILD dist/code-toolbox_${version}_amd64.deb /tmp/pkg/
+    - chown -R builder /tmp/pkg
+    # --nodeps: packaging only copies files, so WebKitGTK needn't be installed here.
+    - su builder -c "cd /tmp/pkg && VERSION=$version makepkg --nodeps"
+    - mkdir -p dist-arch && cp /tmp/pkg/*.pkg.tar.zst dist-arch/
+  artifacts:
+    paths: [dist-arch/]
+    expire_in: 30 days
+
+release:
+  stage: release
+  image: alpine:3.22
+  needs: [linux, arch, windows]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    - apk add --no-cache curl jq >/dev/null
+    - version=${CI_COMMIT_TAG#v}
+    - app_version=$(jq -r .version app/src-tauri/tauri.conf.json)
+    - >
+      [ "$version" = "$app_version" ] ||
+      { echo "Tag $CI_COMMIT_TAG doesn't match version $app_version in tauri.conf.json"; exit 1; }
+    - links='[]'
+    - |
+      for file in dist/* dist-arch/*; do
+        name=$(basename "$file")
+        url="$PACKAGES_URL/$version/$name"
+        echo "Uploading $name"
+        curl -fsS --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$file" "$url" >/dev/null
+        links=$(echo "$links" | jq --arg name "$name" --arg url "$url" '. + [{name: $name, url: $url, link_type: "package"}]')
+      done
+    - >
+      jq -n --arg tag "$CI_COMMIT_TAG" --arg name "Code Toolbox $version" --argjson links "$links"
+      --arg description "$(scripts/release-notes.sh "$version" "$CI_PROJECT_URL/-/blob/$CI_COMMIT_TAG/README.md")"
+      '{tag_name: $tag, name: $name, description: $description, assets: {links: $links}}' > release.json
+    - >
+      curl -fsS --header "JOB-TOKEN: $CI_JOB_TOKEN" --header "Content-Type: application/json"
+      --data @release.json "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases" >/dev/null
+    - echo "Released $CI_PROJECT_URL/-/releases/$CI_COMMIT_TAG"

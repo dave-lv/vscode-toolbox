@@ -1,0 +1,27 @@
+{
+  "name": "code-toolbox-app",
+  "private": true,
+  "version": "0.3.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "vsix": "node -e \"require('fs').mkdirSync('../build',{recursive:true})\" && cd ../vscode-dev-layout && vsce package --no-dependencies --allow-missing-repository --out ../build/dev-layout.vsix"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@vscode/codicons": "^0.0.46-24",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "~2.12",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vscode/vsce": "^4.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}

@@ -1,0 +1,144 @@
+# Builds Code Toolbox for macOS (universal .dmg), Windows (installer .exe) and Linux (.deb, .rpm, and an
+# Arch package repackaged from the .deb), plus the dev-layout extension (.vsix). A tag vX.Y.Z matching
+# the version in app/src-tauri/tauri.conf.json publishes them as a GitHub release.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p toolbox-core --locked
+      - run: npm ci --no-audit --no-fund && npx tsc --noEmit
+        working-directory: app
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ad-hoc signed (no Apple developer certificate), for both Apple silicon and Intel.
+          - os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin --bundles dmg
+            bundle: target/universal-apple-darwin/release/bundle
+          - os: windows-latest
+            args: --bundles nsis
+            bundle: target/release/bundle
+          # The oldest supported Ubuntu, so the .deb runs on older glibc too. No AppImage: it would bundle
+          # WebKitGTK (~95 MB); Arch gets its own package below.
+          - os: ubuntu-22.04
+            args: --bundles deb,rpm
+            bundle: target/release/bundle
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libsqlite3-dev file
+      - run: npm ci --no-audit --no-fund
+        working-directory: app
+      # The build also packages the extension (build/dev-layout.vsix) for the app's resources.
+      - run: npx tauri build ${{ matrix.args }}
+        working-directory: app
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+      - run: sh scripts/collect-bundles.sh ${{ matrix.bundle }} dist
+        shell: bash
+      - name: Extension
+        if: runner.os == 'Linux'
+        run: cp build/dev-layout.vsix "dist/dev-layout-$(node -p "require('./vscode-dev-layout/package.json').version").vsix"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ runner.os }}
+          path: dist/
+          retention-days: 30
+
+  # The .deb's files repackaged for Arch and CachyOS (packaging/arch/PKGBUILD).
+  arch:
+    needs: build
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: bundles-Linux
+          path: dist
+      - run: |
+          version=$(sed -n 's/.*"version": "\(.*\)".*/\1/p' app/src-tauri/tauri.conf.json | head -1)
+          useradd -m builder
+          mkdir /tmp/pkg && cp packaging/arch/PKGBUILD "dist/code-toolbox_${version}_amd64.deb" /tmp/pkg/
+          chown -R builder /tmp/pkg
+          # --nodeps: packaging only copies files, so WebKitGTK needn't be installed here.
+          su builder -c "cd /tmp/pkg && VERSION=$version makepkg --nodeps"
+          mkdir -p dist-arch && cp /tmp/pkg/*.pkg.tar.zst dist-arch/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-Arch
+          path: dist-arch/
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, arch]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: bundles-*
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          app_version=$(jq -r .version app/src-tauri/tauri.conf.json)
+          [ "$version" = "$app_version" ] ||
+            { echo "Tag $GITHUB_REF_NAME doesn't match version $app_version in tauri.conf.json"; exit 1; }
+          sh scripts/release-notes.sh "$version" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/README.md" > notes.md
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Code Toolbox $version" --notes-file notes.md --verify-tag

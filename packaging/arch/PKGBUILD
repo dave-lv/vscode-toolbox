@@ -1,0 +1,18 @@
+# Arch / CachyOS package, repackaged from the .deb that the CI's linux job builds (.gitlab-ci.yml, job "arch").
+# By hand: put code-toolbox_<version>_amd64.deb next to this file, then `VERSION=<version> makepkg`.
+pkgname=code-toolbox
+pkgver=${VERSION:?set VERSION}
+pkgrel=1
+pkgdesc="Tray app for opening VS Code projects and profiles"
+arch=(x86_64)
+url="https://github.com/dave-lv/vscode-toolbox"
+license=(MIT)
+depends=(webkit2gtk-4.1 gtk3 libayatana-appindicator)
+source=("code-toolbox_${pkgver}_amd64.deb")
+sha256sums=(SKIP)
+# A prebuilt binary: no separate -debug package.
+options=(!debug)
+
+package() {
+  bsdtar -xf "$srcdir"/data.tar.* -C "$pkgdir"
+}

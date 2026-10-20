@@ -1,0 +1,12 @@
+# Cargo workspace: the toolbox-core crate and the Tauri app (PLAN-cross-platform.md).
+[workspace]
+members = ["core", "app/src-tauri"]
+resolver = "3"
+
+# Speed first, then size: full optimisation, one codegen unit with LTO, no symbols, no unwinding.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

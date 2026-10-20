@@ -1,0 +1,33 @@
+[package]
+name = "toolbox-core"
+version = "0.1.0"
+license = "MIT"
+description = "Code Toolbox core: VS Code state, catalog, config, launching (no UI)"
+edition = "2024"
+publish = false
+
+[dependencies]
+# The editor's own recent list in state.vscdb (only older versions write it). System SQLite on macOS and
+# Linux; bundled on Windows, which has none.
+rusqlite = { version = "0.40.2", optional = true }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha1_smol = "1.0.1"
+# Launcher logs and git output: random, exclusively created, owner-only temp files.
+tempfile = "3.27.0"
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+
+[target.'cfg(windows)'.dependencies]
+rusqlite = { version = "0.40.2", optional = true, features = ["bundled"] }
+
+[features]
+default = ["recent-db"]
+# Off for cross-target type checks from the Mac (`--no-default-features`): bundled SQLite needs a C
+# compiler for the target.
+recent-db = ["dep:rusqlite"]
+
+[dev-dependencies]
+filetime = "0.2.29"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.191"

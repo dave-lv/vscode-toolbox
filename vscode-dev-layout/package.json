@@ -1,0 +1,176 @@
+{
+  "name": "dev-layout",
+  "displayName": "Dev Layout (shell + AI agent)",
+  "description": "Opens the terminal split into a shell and an AI agent (Claude Code, Codex or your own command) when a project window opens.",
+  "version": "0.2.0",
+  "publisher": "dave-lv",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In untrusted folders nothing runs automatically: the layout waits until the folder is trusted, and whether it opens and what it runs come only from user/profile settings, never from the folder's .vscode/settings.json.",
+      "restrictedConfigurations": [
+        "devLayout.autoOpen",
+        "devLayout.agent",
+        "devLayout.agentCommand",
+        "devLayout.claudeCommand",
+        "devLayout.shellCommand"
+      ]
+    }
+  },
+  "main": "./extension.js",
+  "files": [
+    "extension.js",
+    "LICENSE",
+    "README.md"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "devLayout.open",
+        "title": "Shell + Agent",
+        "category": "Dev Layout"
+      }
+    ],
+    "configuration": {
+      "title": "Dev Layout",
+      "properties": {
+        "devLayout.autoOpen": {
+          "type": "boolean",
+          "default": false,
+          "order": 0,
+          "description": "Build the terminal layout automatically when a project window opens (only if the window has no terminals yet)."
+        },
+        "devLayout.agent": {
+          "type": "string",
+          "enum": [
+            "claude",
+            "codex",
+            "custom"
+          ],
+          "default": "claude",
+          "order": 1,
+          "enumItemLabels": [
+            "Claude Code",
+            "Codex",
+            "Custom"
+          ],
+          "enumDescriptions": [
+            "Runs `claude`.",
+            "Runs `codex`.",
+            "Runs `#devLayout.agentCommand#`, e.g. `gemini` or `aider`."
+          ],
+          "markdownDescription": "The AI agent to start in the agent terminal."
+        },
+        "devLayout.agentCommand": {
+          "type": "string",
+          "default": "",
+          "order": 2,
+          "markdownDescription": "Command for the agent terminal. Empty: `claude` or `codex`. Add flags here, e.g. `claude --model opus` or `codex --full-auto`; with agent **Custom**, any command."
+        },
+        "devLayout.continueSession": {
+          "type": "boolean",
+          "default": true,
+          "order": 3,
+          "markdownDescription": "Resume the project's last conversation: Claude Code gets `--continue` when the project has one, Codex runs `codex resume --last` (which starts a new session when there's none). Not used for a Custom agent."
+        },
+        "devLayout.shellPane": {
+          "type": "boolean",
+          "default": true,
+          "order": 4,
+          "description": "Open a shell terminal next to the agent. Off: only the agent terminal."
+        },
+        "devLayout.shellCommand": {
+          "type": "string",
+          "default": "",
+          "order": 5,
+          "markdownDescription": "Optional command to run in the shell terminal, e.g. `git status`."
+        },
+        "devLayout.focus": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "shell"
+          ],
+          "default": "agent",
+          "order": 6,
+          "description": "Which terminal has the focus once the layout is ready."
+        },
+        "devLayout.agentSize": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0.1,
+          "maximum": 0.9,
+          "order": 7,
+          "description": "Share of the split for the agent terminal: width when side by side (bottom panel), height when stacked (sidebar)."
+        },
+        "devLayout.agentSide": {
+          "type": "string",
+          "enum": [
+            "right",
+            "left"
+          ],
+          "default": "right",
+          "order": 8,
+          "enumDescriptions": [
+            "Right of the shell, or below it when stacked.",
+            "Left of the shell, or above it when stacked."
+          ],
+          "description": "Where the agent terminal goes."
+        },
+        "devLayout.sidebarWidth": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 0.9,
+          "order": 9,
+          "description": "When the terminal lives in the secondary sidebar: its width as a share of the window (e.g. 0.35). 0 leaves the width alone."
+        },
+        "devLayout.restoreDelayMs": {
+          "type": "number",
+          "default": 1500,
+          "order": 10,
+          "description": "How long to wait after the window opens for VS Code to restore terminals before deciding whether to build the layout."
+        },
+        "devLayout.fallbackResizeSteps": {
+          "type": "number",
+          "default": 6,
+          "order": 11,
+          "description": "Resize steps (4 columns each) toward the agent terminal if the terminal width can't be measured."
+        },
+        "devLayout.claudeCommand": {
+          "type": "string",
+          "default": "",
+          "markdownDeprecationMessage": "Use `#devLayout.agentCommand#`."
+        },
+        "devLayout.claudeSize": {
+          "type": "number",
+          "default": 0.7,
+          "markdownDeprecationMessage": "Use `#devLayout.agentSize#`."
+        },
+        "devLayout.claudeSide": {
+          "type": "string",
+          "enum": [
+            "right",
+            "left"
+          ],
+          "default": "right",
+          "markdownDeprecationMessage": "Use `#devLayout.agentSide#`."
+        }
+      }
+    }
+  }
+}
