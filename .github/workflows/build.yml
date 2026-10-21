@@ -1,6 +1,7 @@
 # Builds Code Toolbox for macOS (universal .dmg), Windows (installer .exe) and Linux (.deb, .rpm, and an
 # Arch package repackaged from the .deb), plus the dev-layout extension (.vsix). A tag vX.Y.Z matching
-# the version in app/src-tauri/tauri.conf.json publishes them as a GitHub release.
+# the version in app/src-tauri/tauri.conf.json publishes them as a GitHub release, with latest.json and
+# the signed update files the app's updater installs (see README "Releasing" for the secrets).
 name: Build
 
 on:
@@ -42,10 +43,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Ad-hoc signed (no Apple developer certificate), for both Apple silicon and Intel.
+          # For both Apple silicon and Intel; the .app is also the update (.app.tar.gz).
           - os: macos-latest
             targets: aarch64-apple-darwin,x86_64-apple-darwin
-            args: --target universal-apple-darwin --bundles dmg
+            args: --target universal-apple-darwin --bundles app,dmg
             bundle: target/universal-apple-darwin/release/bundle
           - os: windows-latest
             args: --bundles nsis
@@ -77,11 +78,22 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libsqlite3-dev file
       - run: npm ci --no-audit --no-fund
         working-directory: app
-      # The build also packages the extension (build/dev-layout.vsix) for the app's resources.
-      - run: npx tauri build ${{ matrix.args }}
+      # The build also packages the extension (build/dev-layout.vsix) for the app's resources. On pull
+      # requests from forks the secrets are empty: no update files then, and an ad-hoc signed app.
+      - run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then updater='{"bundle":{"createUpdaterArtifacts":true}}'; else updater='{}'; fi
+          npx tauri build ${{ matrix.args }} --config "$updater"
+        shell: bash
         working-directory: app
         env:
-          APPLE_SIGNING_IDENTITY: "-"
+          # Update files are signed with the updater key (its public half is in tauri.conf.json).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS: the self-signed "Code Toolbox" certificate, the same identity in every release, so an
+          # update keeps the app's macOS permissions (Documents access). Not Apple-verified.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_CERTIFICATE && 'Code Toolbox' || '-' }}
       - run: sh scripts/collect-bundles.sh ${{ matrix.bundle }} dist
         shell: bash
       - name: Extension
@@ -140,5 +152,8 @@ jobs:
           [ "$version" = "$app_version" ] ||
             { echo "Tag $GITHUB_REF_NAME doesn't match version $app_version in tauri.conf.json"; exit 1; }
           sh scripts/release-notes.sh "$version" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/README.md" > notes.md
+          sh scripts/updater-manifest.sh "$version" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" dist > dist/latest.json
+          rm dist/*.sig # in latest.json
           ls -l dist
           gh release create "$GITHUB_REF_NAME" dist/* --title "Code Toolbox $version" --notes-file notes.md --verify-tag

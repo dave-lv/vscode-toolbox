@@ -7,6 +7,7 @@ mod commands;
 mod model;
 mod panel;
 mod ui;
+mod updates;
 mod watcher;
 
 use std::sync::Mutex;
@@ -32,6 +33,8 @@ fn main() {
         .plugin(tauri_plugin_autostart::Builder::new().app_name("Code Toolbox").build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::Pending::default())
         .manage(Mutex::new(Timing::default()))
         .manage(Mutex::new(model::Model::new()))
         .manage(watcher::WatcherState::default())
@@ -54,6 +57,9 @@ fn main() {
             commands::set_agent,
             commands::update_settings,
             commands::reset_config,
+            commands::check_updates,
+            commands::install_update,
+            commands::dismiss_update,
             commands::import_toolbox_favorites,
             commands::set_launch_at_login,
             commands::dismiss_banner,
@@ -72,6 +78,7 @@ fn main() {
             model::reload_editor(handle);
             model::refresh_open(handle);
             model::warm_up(handle);
+            updates::start(handle);
 
             let quit = MenuItem::with_id(app, "quit", "Quit Code Toolbox", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quit])?;

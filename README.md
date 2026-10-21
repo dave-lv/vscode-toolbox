@@ -61,11 +61,16 @@ be opened. Code Toolbox is that list:
 | ⌘, | settings |
 | Esc | clear the search, then close the panel |
 
-**Settings (⚙)**: launch at login, built-in profiles, git status, listing projects you've never opened
+**Settings (⚙)**: launch at login, checking for updates, built-in profiles, git status, listing projects you've never opened
 (from `~/Documents/Projects`), globs to hide, the VS Code app (macOS), installing the dev-layout extension,
 importing JetBrains Toolbox favorites.
 
 The panel uses VS Code's own Dark Modern / Light Modern colours and follows the system's light or dark mode.
+
+**Updates**: a while after starting and then every few hours, Code Toolbox looks for a newer release on GitHub.
+When there is one, the panel offers it; **Update** downloads it, checks its signature, installs it and restarts
+the app. On Linux it installs the new `.deb` or `.rpm` (asking for your password); the Arch package links to the
+release instead. Turn the checks off in Settings; **Check Now** is next to it.
 
 ### The dev-layout extension
 
@@ -206,9 +211,17 @@ cargo check -p toolbox-core --no-default-features --all-targets --target x86_64-
 
 ## Releasing
 
-`.github/workflows/build.yml` tests every push and builds the macOS `.dmg` (universal, ad-hoc signed), the Windows
-installer, the Linux packages (`.deb`, `.rpm`, and an Arch package repackaged from the `.deb` by
-`packaging/arch/PKGBUILD`) and the `.vsix`; they're the run's artifacts for 30 days.
+`.github/workflows/build.yml` tests every push and builds the macOS `.dmg` (universal), the Windows installer, the
+Linux packages (`.deb`, `.rpm`, and an Arch package repackaged from the `.deb` by `packaging/arch/PKGBUILD`) and
+the `.vsix`; they're the run's artifacts for 30 days. A release also gets `latest.json` and the update files the
+app's updater installs (`scripts/updater-manifest.sh`).
+
+It needs four repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | What |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY`, `…_PASSWORD` | The key update files are signed with (`npx tauri signer generate`). Its public half is `plugins.updater.pubkey` in `tauri.conf.json`: the app installs nothing else. **Losing it means installed copies can't update any more.** |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` | A self-signed code-signing certificate named "Code Toolbox", base64 `.p12`. Every macOS build is signed with it, so updates keep the app's macOS permissions; `make` uses it too when it's in the keychain. It isn't Apple-verified, so macOS still asks once on first start. |
 
 1. Bump `version` in `app/src-tauri/tauri.conf.json` (and in `vscode-dev-layout/package.json` if the extension
    changed: the app offers an update when its bundled copy is newer than the installed one), commit.

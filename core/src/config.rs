@@ -47,6 +47,9 @@ pub struct Config {
     pub scan: ScanConfig,
     /// macOS: the editor app to use. Ignored on Windows and Linux.
     pub code_app: String,
+    /// Look for new versions of Code Toolbox (on GitHub). Only written once turned off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub check_updates: bool,
     /// Keys this version doesn't know (written by a newer version, or by hand): kept on save.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -64,9 +67,14 @@ impl Default for Config {
             show_git_status: true,
             scan: ScanConfig::default(),
             code_app: "/Applications/Visual Studio Code.app".into(),
+            check_updates: true,
             extra: Map::new(),
         }
     }
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 // Returned once per load and matched right away, never stored: boxing the config would buy nothing.
@@ -291,6 +299,17 @@ mod tests {
   "showGitStatus" : true
 }"#;
         assert_eq!(to_apple_json(&serde_json::to_value(&c).unwrap()), expected);
+    }
+
+    #[test]
+    fn check_updates_written_only_when_off() {
+        let on = to_apple_json(&serde_json::to_value(Config::default()).unwrap());
+        assert!(!on.contains("checkUpdates"));
+        let off = Config { check_updates: false, ..Config::default() };
+        let text = to_apple_json(&serde_json::to_value(&off).unwrap());
+        assert!(text.contains("\"checkUpdates\" : false"), "{text}");
+        assert!(!serde_json::from_str::<Config>(&text).unwrap().check_updates);
+        assert!(serde_json::from_str::<Config>("{}").unwrap().check_updates);
     }
 
     #[test]

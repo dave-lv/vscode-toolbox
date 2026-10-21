@@ -38,6 +38,10 @@ pub struct Model {
     pub open: HashSet<String>,
     pub git: HashMap<String, GitInfo>,
     pub banner: Option<Banner>,
+    /// A newer version found on GitHub (updates.rs).
+    pub update: Option<crate::updates::UpdateInfo>,
+    /// The version whose notice was dismissed; not shown again until the app restarts.
+    pub dismissed_update: Option<String>,
     shell_env: Option<HashMap<String, String>>,
     scanned: Vec<String>,
     git_fetched_at: Option<Instant>,
@@ -70,6 +74,8 @@ impl Model {
             open: HashSet::new(),
             git: HashMap::new(),
             banner: None,
+            update: None,
+            dismissed_update: None,
             shell_env: None,
             scanned: vec![],
             git_fetched_at: None,

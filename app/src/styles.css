@@ -622,6 +622,15 @@ textarea:focus-visible {
   color: var(--warning);
 }
 
+/* An update: text, then its buttons on the right */
+.banner.update {
+  align-items: center;
+}
+
+.banner.update > span {
+  flex: 1;
+}
+
 .banner .icon-button {
   width: 20px;
   min-width: 20px;
@@ -761,12 +770,12 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
-.buttons button.primary {
+button.primary {
   background: var(--button);
   color: var(--button-fg);
 }
 
-.buttons button.primary:hover {
+button.primary:hover {
   background: var(--button-hover);
 }
 

@@ -19,10 +19,13 @@ token=${GITLAB_TOKEN:-$(security find-generic-password -s code-toolbox-gitlab -w
 status=$(curl -s -o /dev/null -w '%{http_code}' --header "PRIVATE-TOKEN: $token" "$API/releases/v$version")
 [ "$status" = 200 ] || { echo "No release v$version yet (HTTP $status): push the tag v$version and let its pipeline finish" >&2; exit 1; }
 
-# Ad-hoc signed (no Apple developer certificate), for both Apple silicon and Intel. CI=true keeps the
-# DMG script from scripting Finder to lay out the window, which would ask for Automation access.
+# For both Apple silicon and Intel. Signed with the self-signed "Code Toolbox" certificate when it's in the
+# keychain (the same identity as the GitHub builds, so updates keep macOS permissions), else ad hoc. CI=true
+# keeps the DMG script from scripting Finder to lay out the window, which would ask for Automation access.
+identity=-
+security find-identity -p codesigning | grep -q '"Code Toolbox"' && identity="Code Toolbox"
 rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null
-(cd app && CI=true APPLE_SIGNING_IDENTITY=- npx tauri build --target universal-apple-darwin --bundles dmg)
+(cd app && CI=true APPLE_SIGNING_IDENTITY=$identity npx tauri build --target universal-apple-darwin --bundles dmg)
 rm -rf build/mac && mkdir -p build/mac
 scripts/collect-bundles.sh target/universal-apple-darwin/release/bundle build/mac
 file=$(ls build/mac/*.dmg)

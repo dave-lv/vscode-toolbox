@@ -209,6 +209,7 @@ pub struct SettingsPatch {
     scan_roots: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
     code_app: Option<String>,
+    check_updates: Option<bool>,
 }
 
 #[tauri::command]
@@ -232,7 +233,26 @@ pub fn update_settings(app: AppHandle, patch: SettingsPatch) {
         if let Some(v) = &patch.code_app {
             c.code_app = v.trim().to_string();
         }
+        if let Some(v) = patch.check_updates {
+            c.check_updates = v;
+        }
     });
+}
+
+/// Settings → Check for Updates.
+#[tauri::command]
+pub async fn check_updates(app: AppHandle) {
+    crate::updates::check(&app, true).await;
+}
+
+#[tauri::command]
+pub async fn install_update(app: AppHandle) {
+    crate::updates::install(&app).await;
+}
+
+#[tauri::command]
+pub fn dismiss_update(app: AppHandle) {
+    crate::updates::dismiss(&app);
 }
 
 #[tauri::command]

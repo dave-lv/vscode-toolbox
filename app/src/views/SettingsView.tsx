@@ -45,6 +45,15 @@ export function SettingsView() {
       )}
 
       <Toggle label="Launch at login" checked={ui.launchAtLogin} onChange={(on) => ipc.setLaunchAtLogin(on)} />
+      <div className="line">
+        <Toggle
+          label="Check for updates automatically"
+          checked={s.checkUpdates}
+          onChange={(on) => ipc.updateSettings({ checkUpdates: on })}
+        />
+        <span className="spacer" />
+        <button onClick={() => ipc.checkUpdates()}>Check Now</button>
+      </div>
       <Toggle
         label="Show built-in profiles (Agents)"
         checked={s.showBuiltinProfiles}
@@ -125,7 +134,9 @@ export function SettingsView() {
 
       <hr />
       <div className="line">
-        <span className="faint small selectable">Config: {ui.configPath}</span>
+        <span className="faint small selectable">
+          Code Toolbox {ui.appVersion} · {ui.configPath}
+        </span>
         <span className="spacer" />
         <button onClick={() => ipc.quit()}>Quit</button>
       </div>

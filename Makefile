@@ -8,9 +8,11 @@ VSIX       := build/dev-layout.vsix
 CODE       := /Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
 PROFILE    := PHP
 
-# A local self-signed "Code Toolbox Dev" certificate keeps the app's identity the same across rebuilds,
-# so macOS doesn't ask for Documents access after every build. Without it, the build stays ad-hoc signed.
-SIGN_IDENTITY ?= $(shell security find-identity -p codesigning 2>/dev/null | grep -q '"Code Toolbox Dev"' && echo "Code Toolbox Dev")
+# A self-signed code-signing certificate keeps the app's identity the same across rebuilds and updates, so
+# macOS doesn't ask for Documents access again: "Code Toolbox" (the one releases are signed with, see
+# README "Releasing"), else an older local "Code Toolbox Dev". Without either, the build stays ad-hoc signed.
+SIGN_IDENTITY ?= $(shell ids=$$(security find-identity -p codesigning 2>/dev/null); \
+	for n in "Code Toolbox" "Code Toolbox Dev"; do echo "$$ids" | grep -q "\"$$n\"" && { echo "$$n"; break; }; done)
 
 .PHONY: build test install run dev screenshots vsix install-ext publish-mac clean
 

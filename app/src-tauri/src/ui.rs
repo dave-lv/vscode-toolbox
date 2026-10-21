@@ -48,6 +48,8 @@ pub struct UiState {
     pub launch_at_login: bool,
     pub warnings: Vec<String>,
     pub dev_layout_version: String,
+    pub app_version: String,
+    pub update: Option<crate::updates::UpdateInfo>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,6 +104,7 @@ pub struct Settings {
     pub exclude: Vec<String>,
     /// macOS only.
     pub code_app: String,
+    pub check_updates: bool,
 }
 
 impl UiState {
@@ -165,6 +168,7 @@ impl UiState {
                 scan_depth: m.config.scan.depth,
                 exclude: m.config.exclude.clone(),
                 code_app: m.config.code_app.clone(),
+                check_updates: m.config.check_updates,
             },
             config_error: m.config_error.clone(),
             config_path: m.paths.tilde(&m.paths.config_file().to_string_lossy()),
@@ -172,6 +176,8 @@ impl UiState {
             launch_at_login: app.autolaunch().is_enabled().unwrap_or(false),
             warnings: m.snapshot.warnings.clone(),
             dev_layout_version: DEV_LAYOUT_VERSION.clone(),
+            app_version: app.package_info().version.to_string(),
+            update: m.update.clone(),
         }
     }
 }

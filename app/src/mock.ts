@@ -48,13 +48,15 @@ export const fixture: UiState = {
     { id: "web", name: "Web", icon: null, isBuiltin: false, isDefault: false, usesDefaultExtensions: false, extensions: [{ id: "dbaeumer.vscode-eslint", version: "3.0", displayName: "ESLint" }, { id: "esbenp.prettier-vscode", version: "11.0", displayName: "Prettier" }, { id: "vue.volar", version: "3.1", displayName: "Vue (Official)" }], projectCount: 4, settingsFile: "/u/w/settings.json", keybindingsFile: "/u/w/keybindings.json", directory: "/u/w" },
     { id: "builtin/agents", name: "Agents", icon: "robot", isBuiltin: true, isDefault: false, usesDefaultExtensions: true, extensions: [], projectCount: 0, settingsFile: "/u/settings.json", keybindingsFile: "/u/keybindings.json", directory: "/u/a" },
   ],
-  settings: { showBuiltinProfiles: false, showGitStatus: true, scanEnabled: false, scanRoots: ["~/Documents/Projects"], scanDepth: 2, exclude: ["~/Downloads/**", "~/Library/**"], codeApp: "/Applications/Visual Studio Code.app" },
+  settings: { showBuiltinProfiles: false, showGitStatus: true, scanEnabled: false, scanRoots: ["~/Documents/Projects"], scanDepth: 2, exclude: ["~/Downloads/**", "~/Library/**"], codeApp: "/Applications/Visual Studio Code.app", checkUpdates: true },
   configError: null,
   configPath: "~/.config/code-toolbox/config.json",
   banner: null,
   launchAtLogin: false,
   warnings: [],
   devLayoutVersion: "0.2.0",
+  appVersion: "0.4.0",
+  update: null,
 };
 
 let state = fixture;

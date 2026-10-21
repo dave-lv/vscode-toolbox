@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Code Toolbox",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "identifier": "io.github.dave-lv.code-toolbox",
   "build": {
     "devUrl": "http://localhost:1420",
@@ -61,6 +61,17 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBNjQ1RTAyMzBENTc1MjcKUldRbmRkVXdBbDVrQ2prcUhpUVQ3dk9hTnpaQlM3M04ySytlZ0VlTlZGbE03SHBTeFhON3piQ1UK",
+      "endpoints": [
+        "https://github.com/dave-lv/vscode-toolbox/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

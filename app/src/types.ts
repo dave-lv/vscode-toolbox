@@ -68,6 +68,7 @@ export interface Settings {
   scanDepth: number;
   exclude: string[];
   codeApp: string;
+  checkUpdates: boolean;
 }
 
 export interface Banner {
@@ -94,4 +95,15 @@ export interface UiState {
   warnings: string[];
   /** Version of the dev-layout extension bundled with the app. */
   devLayoutVersion: string;
+  appVersion: string;
+  /** A newer Code Toolbox on GitHub. */
+  update: UpdateInfo | null;
+}
+
+export interface UpdateInfo {
+  version: string;
+  /** False where this install can't replace itself: the notice links to the release instead. */
+  canInstall: boolean;
+  /** Download progress in percent while installing. */
+  progress: number | null;
 }

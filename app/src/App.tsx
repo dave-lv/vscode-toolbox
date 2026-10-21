@@ -51,6 +51,7 @@ function PanelView() {
           <span>{panel.ui.editorName} wasn't found, so projects can't be opened.</span>
         </div>
       )}
+      <UpdateView />
       <BannerView />
       {panel.picker && <ProfilePicker />}
     </div>
@@ -112,6 +113,36 @@ function TabBar({ search }: { search: React.RefObject<HTMLInputElement | null> }
           </button>
         )}
       </label>
+    </div>
+  );
+}
+
+/** A newer Code Toolbox: Update downloads and installs it, then the app restarts. */
+function UpdateView() {
+  const { ui } = usePanel();
+  const update = ui.update;
+  if (!update) return null;
+  const busy = update.progress !== null;
+  return (
+    <div className="banner update">
+      <i className="codicon codicon-cloud-download" />
+      <span>
+        {busy
+          ? update.progress! < 100
+            ? `Downloading Code Toolbox ${update.version}… ${update.progress}%`
+            : `Installing Code Toolbox ${update.version}…`
+          : `Code Toolbox ${update.version} is available.`}
+      </span>
+      {!busy && (
+        <>
+          <button className="primary" onClick={() => ipc.installUpdate()}>
+            {update.canInstall ? "Update" : "Download"}
+          </button>
+          <button className="icon-button" title="Not now" onClick={() => ipc.dismissUpdate()}>
+            <i className="codicon codicon-close" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
