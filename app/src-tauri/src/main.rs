@@ -66,6 +66,7 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle();
+            panel::make_panel(handle);
             watcher::start(handle);
             model::load_config(handle);
             model::reload_editor(handle);
