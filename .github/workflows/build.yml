@@ -78,22 +78,39 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libsqlite3-dev file
       - run: npm ci --no-audit --no-fund
         working-directory: app
-      # The build also packages the extension (build/dev-layout.vsix) for the app's resources. On pull
-      # requests from forks the secrets are empty: no update files then, and an ad-hoc signed app.
+      # macOS: the self-signed "Code Toolbox" certificate, the same identity in every release, so an update
+      # keeps the app's macOS permissions (Documents access). Not Apple-verified. Imported here rather than
+      # through Tauri's APPLE_CERTIFICATE, which only accepts certificates macOS trusts. Without the secret
+      # (pull requests from forks) the app is signed ad hoc.
+      - name: Signing certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"; exit 0; fi
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          password=$(openssl rand -base64 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          # shellcheck disable=SC2046 # the existing keychains, one word each
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "APPLE_SIGNING_IDENTITY=Code Toolbox" >> "$GITHUB_ENV"
+      # The build also packages the extension (build/dev-layout.vsix) for the app's resources. Update files
+      # are signed with the updater key (its public half is in tauri.conf.json); without it (forks) none.
       - run: |
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then updater='{"bundle":{"createUpdaterArtifacts":true}}'; else updater='{}'; fi
           npx tauri build ${{ matrix.args }} --config "$updater"
         shell: bash
         working-directory: app
         env:
-          # Update files are signed with the updater key (its public half is in tauri.conf.json).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS: the self-signed "Code Toolbox" certificate, the same identity in every release, so an
-          # update keeps the app's macOS permissions (Documents access). Not Apple-verified.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_CERTIFICATE && 'Code Toolbox' || '-' }}
       - run: sh scripts/collect-bundles.sh ${{ matrix.bundle }} dist
         shell: bash
       - name: Extension
