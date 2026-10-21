@@ -602,7 +602,7 @@ textarea:focus-visible {
 
 .banner {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   margin: 0 8px 8px;
   padding: 8px 6px 8px 10px;
@@ -623,10 +623,6 @@ textarea:focus-visible {
 }
 
 /* An update: text, then its buttons on the right */
-.banner.update {
-  align-items: center;
-}
-
 .banner.update > span {
   flex: 1;
 }
@@ -777,6 +773,14 @@ button.primary {
 
 button.primary:hover {
   background: var(--button-hover);
+}
+
+/* Settings footer: the app's version, then the config path, each on its own line */
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .hidden-row {

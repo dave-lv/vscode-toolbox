@@ -134,8 +134,9 @@ export function SettingsView() {
 
       <hr />
       <div className="line">
-        <span className="faint small selectable">
-          Code Toolbox {ui.appVersion} · {ui.configPath}
+        <span className="faint small selectable footer-info">
+          <span>Code Toolbox {ui.appVersion}</span>
+          <span>Config: {ui.configPath}</span>
         </span>
         <span className="spacer" />
         <button onClick={() => ipc.quit()}>Quit</button>
