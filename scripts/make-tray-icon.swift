@@ -1,5 +1,5 @@
-// Renders the macOS menu bar icon: `</>` drawn from plain strokes (like the app icon's), black on transparent
-// (macOS uses it as a template image and tints it). Windows and Linux show the app icon instead.
+// Renders the macOS menu bar icon: `</>` drawn from plain strokes (the app icon has the same mark), black on
+// transparent (macOS uses it as a template image and tints it). Windows and Linux show the app icon instead.
 // Usage: swift scripts/make-tray-icon.swift app/src-tauri/icons/tray.png
 import AppKit
 
