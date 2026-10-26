@@ -1,6 +1,6 @@
 [package]
 name = "code-toolbox"
-version = "0.4.3"
+version = "0.4.4"
 license = "MIT"
 description = "Code Toolbox: open VS Code projects and profiles from the menu bar / tray"
 edition = "2024"
@@ -29,3 +29,6 @@ tauri-plugin-updater = "2.10"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", features = ["NSButton", "NSCell", "NSControl", "NSResponder", "NSStatusItem", "NSView", "NSWindow", "NSPanel"] }
 objc2-foundation = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }

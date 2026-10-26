@@ -6,13 +6,13 @@
 mod commands;
 mod model;
 mod panel;
+mod tray;
 mod ui;
 mod updates;
 mod watcher;
 
 use std::sync::Mutex;
 
-use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
@@ -82,14 +82,8 @@ fn main() {
 
             let quit = MenuItem::with_id(app, "quit", "Quit Code Toolbox", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quit])?;
-            // macOS tints a black template icon to fit the menu bar; Windows and Linux trays don't, and
-            // black would vanish on a dark taskbar, so they get the coloured app icon.
-            #[cfg(target_os = "macos")]
-            let icon = include_bytes!("../icons/tray.png");
-            #[cfg(not(target_os = "macos"))]
-            let icon = include_bytes!("../icons/32x32.png");
             TrayIconBuilder::with_id(TRAY)
-                .icon(Image::from_bytes(icon)?)
+                .icon(tray::image(handle))
                 .icon_as_template(cfg!(target_os = "macos"))
                 .tooltip("Code Toolbox")
                 .menu(&menu)
@@ -103,6 +97,9 @@ fn main() {
                     // Lets the positioner know where the icon is.
                     tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state, .. } = event {
+                        // Catches a taskbar colour change that left the apps' colour (so no ThemeChanged).
+                        #[cfg(windows)]
+                        crate::tray::refresh(tray.app_handle());
                         match button_state {
                             // Open/close on press, like native menu bar extras.
                             MouseButtonState::Down => panel::toggle_panel(tray.app_handle(), true),
@@ -117,10 +114,15 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() == PANEL
-                && let WindowEvent::Focused(false) = event
-            {
-                panel::hide_panel(window.app_handle());
+            if window.label() != PANEL {
+                return;
+            }
+            match event {
+                WindowEvent::Focused(false) => panel::hide_panel(window.app_handle()),
+                // A dark or light taskbar now: the tray icon's colour follows.
+                #[cfg(not(target_os = "macos"))]
+                WindowEvent::ThemeChanged(_) => tray::refresh(window.app_handle()),
+                _ => {}
             }
         })
         .run(tauri::generate_context!())
