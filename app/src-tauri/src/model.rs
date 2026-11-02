@@ -120,13 +120,33 @@ impl Model {
 /// The first editor that's installed, in table order (VS Code first); VS Code if none is.
 fn detect_editor(config: &Config) -> (&'static Editor, Option<Installation>) {
     for editor in EDITORS {
-        let paths = Paths::current(editor);
-        let app_override = (paths.os == Os::Macos && editor.id == VSCODE.id).then_some(config.code_app.as_str());
-        if let Some(inst) = Installation::detect(&paths, app_override) {
+        if let Some(inst) = find_installation(&Paths::current(editor), &config.code_app) {
             return (editor, Some(inst));
         }
     }
     (&VSCODE, None)
+}
+
+/// The installation of the editor `paths` is for. Looked up again before each launch and read: an update
+/// can move it (on Windows, VS Code keeps its app files in a folder named after the build, so
+/// `bin\code.cmd` points somewhere new after each update and the old folder is deleted).
+fn find_installation(paths: &Paths, code_app: &str) -> Option<Installation> {
+    let app_override = (paths.os == Os::Macos && paths.editor.id == VSCODE.id).then_some(code_app);
+    Installation::detect(paths, app_override)
+}
+
+/// Looks the installation up again and stores it; see `find_installation`. Does file IO, so not on the
+/// main thread.
+fn refresh_installation(app: &AppHandle) -> Option<Installation> {
+    let (paths, code_app) = with_model(app, |m| (m.paths.clone(), m.config.code_app.clone()));
+    let found = find_installation(&paths, &code_app);
+    with_model(app, |m| {
+        // Skip if Settings changed the editor or app path meanwhile; that set its own.
+        if m.paths.editor.id == paths.editor.id && m.config.code_app == code_app {
+            m.installation.clone_from(&found);
+        }
+    });
+    found
 }
 
 // MARK: - Access and events
@@ -178,12 +198,13 @@ pub fn panel_did_open(app: &AppHandle) {
 }
 
 pub fn reload_editor(app: &AppHandle) {
-    let (paths, installation, locale, generation) = with_model(app, |m| {
+    let (paths, locale, generation) = with_model(app, |m| {
         m.read_gen += 1;
-        (m.paths.clone(), m.installation.clone(), m.system_locale.clone(), m.read_gen)
+        (m.paths.clone(), m.system_locale.clone(), m.read_gen)
     });
     let app = app.clone();
     std::thread::spawn(move || {
+        let installation = refresh_installation(&app);
         let snapshot =
             VsCodeReader { paths: &paths, installation: installation.as_ref(), system_locale: locale }.read();
         let (changed, git_needed) = with_model(&app, |m| {
@@ -459,15 +480,14 @@ pub fn run_cli(
             f(app, result);
         }
     };
-    let Some((installation, env, home)) =
-        with_model(app, |m| Some((m.installation.clone()?, m.shell_env.clone(), PathBuf::from(m.paths.home()))))
-    else {
-        let name = with_model(app, |m| m.paths.editor.name);
-        finish(app, Err(format!("{name} wasn't found. On macOS, check the app path in Settings.")));
-        return;
-    };
     let app = app.clone();
     std::thread::spawn(move || {
+        let Some(installation) = refresh_installation(&app) else {
+            let name = with_model(&app, |m| m.paths.editor.name);
+            finish(&app, Err(format!("{name} wasn't found. On macOS, check the app path in Settings.")));
+            return;
+        };
+        let (env, home) = with_model(&app, |m| (m.shell_env.clone(), PathBuf::from(m.paths.home())));
         let env = env.or_else(|| {
             let env = resolve_shell_env();
             with_model(&app, |m| m.shell_env.clone_from(&env));
