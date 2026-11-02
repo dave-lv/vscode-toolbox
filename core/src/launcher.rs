@@ -59,6 +59,26 @@ impl LaunchRequest {
     }
 }
 
+/// The variables a Claude Code session sets for everything it starts, if this process was started from
+/// one (a dev build, an install script run by Claude). Passed on, they'd reach the editor's terminals,
+/// and `claude` there would take itself for a child session and stop saving transcripts.
+pub fn inherited_agent_vars() -> Vec<String> {
+    agent_vars(std::env::vars_os().filter_map(|(k, _)| k.into_string().ok()))
+}
+
+fn agent_vars(keys: impl Iterator<Item = String>) -> Vec<String> {
+    let keys: Vec<String> = keys.collect();
+    if !keys.iter().any(|k| k == "CLAUDECODE") {
+        return Vec::new();
+    }
+    keys.into_iter()
+        .filter(|k| {
+            matches!(k.as_str(), "CLAUDECODE" | "CLAUDE_PID" | "CLAUDE_EFFORT" | "AI_AGENT")
+                || k.starts_with("CLAUDE_CODE_")
+        })
+        .collect()
+}
+
 /// The CLI process for `request`. `env` replaces the environment (the login-shell environment on macOS
 /// and Linux: the editor skips its own shell-environment lookup when started from its CLI).
 pub fn command(
@@ -76,8 +96,15 @@ pub fn command(
         }
     };
     cmd.args(request.arguments());
-    if let Some(env) = env {
-        cmd.env_clear().envs(env);
+    match env {
+        Some(env) => {
+            cmd.env_clear().envs(env);
+        }
+        None => {
+            for key in inherited_agent_vars() {
+                cmd.env_remove(key);
+            }
+        }
     }
     if matches!(installation.cli, Cli::Electron { .. }) {
         cmd.env("ELECTRON_RUN_AS_NODE", "1").env_remove("VSCODE_DEV");
@@ -164,6 +191,16 @@ mod tests {
         assert_eq!(
             LaunchRequest::UninstallExtension { id: "old.dev-layout".into(), profile_name: None }.arguments(),
             ["--uninstall-extension", "old.dev-layout"]
+        );
+    }
+
+    #[test]
+    fn agent_vars_only_inside_a_session() {
+        let keys = |ks: &[&str]| ks.iter().map(|k| k.to_string()).collect::<Vec<_>>().into_iter();
+        assert!(agent_vars(keys(&["PATH", "CLAUDE_CODE_USE_BEDROCK"])).is_empty());
+        assert_eq!(
+            agent_vars(keys(&["PATH", "CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_PID", "AI_AGENT", "CLAUDE"])),
+            ["CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_PID", "AI_AGENT"]
         );
     }
 

@@ -51,6 +51,10 @@ pub fn resolve(shell: Option<&str>, timeout: Duration) -> Option<HashMap<String,
         .stderr(Stdio::null())
         // Lets shell startup files skip slow or interactive parts, as they can for the editor.
         .env("VSCODE_RESOLVING_ENVIRONMENT", "1");
+    // Startup files that set any of these still can; only what this process inherited is dropped.
+    for key in crate::launcher::inherited_agent_vars() {
+        cmd.env_remove(key);
+    }
     if std::env::var_os("TERM").is_none() {
         cmd.env("TERM", "xterm-256color");
     }
@@ -161,8 +165,11 @@ mod tests {
         // Prints the environment but leaves a background job holding stdout: still returns promptly.
         let start = Instant::now();
         let bg = script("bg", &format!("sleep 30 &\nprintf '\\n{MARKER}\\n'; /usr/bin/env -0\n"));
-        assert!(resolve(Some(&bg), Duration::from_secs(5)).is_some_and(|e| e.contains_key("PATH")));
+        let env = resolve(Some(&bg), Duration::from_secs(5)).unwrap();
+        assert!(env.contains_key("PATH"));
         assert!(start.elapsed() < Duration::from_secs(4));
+        // When the tests themselves run inside a Claude Code session, its variables don't get through.
+        assert!(crate::launcher::inherited_agent_vars().iter().all(|k| !env.contains_key(k)));
     }
 
     /// The real login shell, plus csh/tcsh where installed (`cargo test -- --ignored`).
